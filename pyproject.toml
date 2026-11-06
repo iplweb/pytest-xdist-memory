@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-xdist-memory"
+version = "0.1.0.dev0"
+description = "Size pytest-xdist by available RAM: measure worker memory (with browsers and other child processes), keep a per-machine profile, answer -n auto from it, and optionally kill a run before it freezes the machine."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Michał Pasternak", email = "michal.dtz@gmail.com" },
+]
+keywords = ["pytest", "xdist", "memory", "RAM", "parallel", "playwright", "oom"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = ["pytest>=7", "psutil>=5"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-xdist>=3",
+    "ruff>=0.15,<0.16",
+]
+
+[project.entry-points.pytest11]
+xdist_memory = "pytest_xdist_memory.plugin"
+
+[project.urls]
+Homepage = "https://github.com/iplweb/pytest-xdist-memory"
+Source = "https://github.com/iplweb/pytest-xdist-memory"
+Issues = "https://github.com/iplweb/pytest-xdist-memory/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pytest_xdist_memory"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "tests/", "README.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p pytester"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
