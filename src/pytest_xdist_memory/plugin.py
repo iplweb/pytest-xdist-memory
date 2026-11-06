@@ -10,8 +10,8 @@ The plugin, once enabled with ``--xdist-memory``:
 
 * measures, in every worker, the peak memory of the worker AND all of its
   descendants (browsers, live servers...) -- PSS on Linux, RSS elsewhere;
-* optionally measures docker containers by name (a test database started by
-  testcontainers is not a child of pytest);
+* optionally measures docker containers by name or by published port (a test
+  database started by testcontainers is not a child of pytest);
 * records the peaks in a per-machine profile file, separately per ``-m``
   marker expression ("suite");
 * answers ``-n auto`` / ``-n logical`` with as many workers as fit into the
@@ -96,6 +96,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "(ini: xdist_memory_docker).",
     )
     group.addoption(
+        "--xdist-memory-docker-port-env",
+        default=None,
+        metavar="VAR",
+        help="also measure the docker container publishing the host port in "
+        "environment variable VAR, e.g. the one testcontainers exports for "
+        "the test database; exact even with parallel runs "
+        "(ini: xdist_memory_docker_port_env).",
+    )
+    group.addoption(
         "--xdist-memory-performance-cores",
         action="store_true",
         default=None,
@@ -133,6 +142,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         ("xdist_memory_default_worker", "string", "1024"),
         ("xdist_memory_extra", "string", "0"),
         ("xdist_memory_docker", "string", ""),
+        ("xdist_memory_docker_port_env", "string", ""),
         ("xdist_memory_performance_cores", "bool", False),
         ("xdist_memory_min_tests", "string", "20"),
         ("xdist_memory_watchdog", "bool", False),
@@ -157,6 +167,7 @@ class Settings:
         self.default_worker_mb = opt("xdist_memory_default_worker", int)
         self.extra_mb = opt("xdist_memory_extra", int)
         self.docker = opt("xdist_memory_docker", str)
+        self.docker_port_env = opt("xdist_memory_docker_port_env", str)
         self.performance_cores = opt("xdist_memory_performance_cores", bool)
         self.min_tests = opt("xdist_memory_min_tests", int)
         self.watchdog = opt("xdist_memory_watchdog", bool)
@@ -194,11 +205,18 @@ def pytest_xdist_auto_num_workers(config: pytest.Config) -> int | None:
 class Sampler:
     """Background thread recording the peak memory of a process."""
 
-    def __init__(self, interval: float, subtree: bool, docker: str = "") -> None:
+    def __init__(
+        self,
+        interval: float,
+        subtree: bool,
+        docker: str = "",
+        docker_port_env: str = "",
+    ) -> None:
         self.proc = psutil.Process()
         self.interval = interval
         self.subtree = subtree
         self.docker = docker
+        self.docker_port_env = docker_port_env
         self.peak_mb = 0
         self.docker_peak_mb = 0
         self.on_sample = None
@@ -225,16 +243,23 @@ class Sampler:
         self.peak_mb = max(self.peak_mb, mb)
         return mb
 
+    def sample_docker(self) -> None:
+        # Read the port at sample time: plugins (testcontainers) may export
+        # it after we were configured.
+        port = os.environ.get(self.docker_port_env) if self.docker_port_env else None
+        if self.docker_port_env and not port:
+            return
+        mb = memory.docker_mb(self.docker, port) or 0
+        self.docker_peak_mb = max(self.docker_peak_mb, mb)
+
     def _run(self) -> None:
         # docker stats is slow (~1 s); sample containers less often.
         docker_every = max(1, int(10 / max(self.interval, 0.1)))
         tick = 0
         while not self._stop.wait(self.interval):
             mb = self.sample()
-            if self.docker and tick % docker_every == 0:
-                self.docker_peak_mb = max(
-                    self.docker_peak_mb, memory.docker_mb(self.docker) or 0
-                )
+            if (self.docker or self.docker_port_env) and tick % docker_every == 0:
+                self.sample_docker()
             tick += 1
             if self.on_sample is not None:
                 self.on_sample(mb)
@@ -296,6 +321,7 @@ class Runtime:
             settings.interval,
             subtree=not self.controller,
             docker=settings.docker if not self.worker else "",
+            docker_port_env=settings.docker_port_env if not self.worker else "",
         )
         self.workers: dict[str, dict[str, Any]] = {}
         self.tests = 0

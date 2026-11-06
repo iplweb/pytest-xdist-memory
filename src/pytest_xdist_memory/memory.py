@@ -58,23 +58,35 @@ def _parse_usage(usage: str) -> int | None:
     return None
 
 
-def docker_mb(match: str) -> int | None:
-    """Total memory of running containers whose name contains ``match``.
+def _docker(*args: str) -> str | None:
+    try:
+        return subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=20
+        ).stdout
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def docker_mb(match: str = "", port: str | None = None) -> int | None:
+    """Total memory of running containers whose name contains ``match``
+    and/or which publish host ``port``.
 
     ``None`` when docker is unavailable or nothing matches. Containers are
     not children of pytest (e.g. a database started by testcontainers), so
-    they cannot be found by walking the process tree.
+    they cannot be found by walking the process tree. Matching by the
+    published port picks exactly THIS run's container even when parallel
+    runs (other checkouts) have containers with similar names.
     """
-    if not shutil.which("docker"):
+    if not shutil.which("docker") or not (match or port):
         return None
-    try:
-        out = subprocess.run(
-            ["docker", "stats", "--no-stream", "--format", "{{.Name}} {{.MemUsage}}"],
-            capture_output=True,
-            text=True,
-            timeout=20,
-        ).stdout
-    except (subprocess.TimeoutExpired, OSError):
+    names: list[str] = []
+    if port:
+        out = _docker("ps", "--filter", f"publish={port}", "--format", "{{.Names}}")
+        names = (out or "").split()
+        if not names:
+            return None
+    out = _docker("stats", "--no-stream", "--format", "{{.Name}} {{.MemUsage}}", *names)
+    if out is None:
         return None
     total = None
     for line in out.splitlines():

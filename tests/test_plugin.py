@@ -209,3 +209,26 @@ def test_profile_keeps_last_runs(tmp_path):
         profile.record_run(path, "default", {"worker_peak_mb": i})
     runs = profile.load(path)["suites"]["default"]["runs"]
     assert [r["worker_peak_mb"] for r in runs] == list(range(3, profile.KEEP_RUNS + 3))
+
+
+def test_docker_matching_by_port_and_name(monkeypatch):
+    from pytest_xdist_memory import memory
+
+    calls = []
+
+    def fake_docker(*args):
+        calls.append(args)
+        if args[0] == "ps":
+            return "mine-psql\n" if args[2] == "publish=5432" else ""
+        names = args[4:] or ("mine-psql", "other-psql", "redis")
+        usage = {"mine-psql": "300MiB", "other-psql": "1.5GiB", "redis": "20MiB"}
+        return "".join(f"{n} {usage[n]} / 14GiB\n" for n in names)
+
+    monkeypatch.setattr(memory.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(memory, "_docker", fake_docker)
+
+    assert memory.docker_mb(port="5432") == 300
+    assert calls[-1][4:] == ("mine-psql",)  # stats only for that container
+    assert memory.docker_mb(match="psql") == 300 + 1536
+    assert memory.docker_mb(port="9999") is None
+    assert memory.docker_mb() is None

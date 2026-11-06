@@ -20,9 +20,13 @@ With `--xdist-memory` (or `xdist_memory = true` in the ini file):
   processes**: browsers, live servers, subprocesses. Linux uses PSS (a fair
   share of pages shared between processes, so the several processes of one
   Chromium are not counted several times over); other systems use RSS.
-- **Measures containers** too, if you ask it to (`--xdist-memory-docker
-  NAME`): a test database started by testcontainers is not a child of pytest.
-  The peak is divided by the number of workers.
+- **Measures containers** too, if you ask it to: a test database started by
+  testcontainers is not a child of pytest. Containers can be matched by name
+  (`--xdist-memory-docker SUBSTR`) or, more precisely, by the host port they
+  publish (`--xdist-memory-docker-port-env VAR`, where `VAR` is the
+  environment variable your fixtures export with the port). Matching by port
+  is exact even when parallel runs from other checkouts have containers with
+  similar names. The peak is divided by the number of workers.
 - **Records** the peaks in a per-machine profile, `.pytest-xdist-memory.json`.
   Each `-m` marker expression is a separate "suite": `-m playwright` workers
   are much heavier than `-m "not playwright"` ones. The last 5 runs are kept,
@@ -74,7 +78,8 @@ machine.
 | `--xdist-memory-safety F` | `xdist_memory_safety` | 1.25 | multiplier on the worker peak |
 | `--xdist-memory-default-worker MB` | `xdist_memory_default_worker` | 1024 | used until a run is recorded |
 | `--xdist-memory-extra MB` | `xdist_memory_extra` | 0 | fixed extra per worker (e.g. its DB) |
-| `--xdist-memory-docker SUBSTR` | `xdist_memory_docker` | | measure matching containers |
+| `--xdist-memory-docker SUBSTR` | `xdist_memory_docker` | | measure containers by name |
+| `--xdist-memory-docker-port-env VAR` | `xdist_memory_docker_port_env` | | measure the container publishing port `$VAR` |
 | `--xdist-memory-performance-cores` | `xdist_memory_performance_cores` | off | Apple Silicon: P-cores only |
 | `--xdist-memory-min-tests N` | `xdist_memory_min_tests` | 20 | smaller runs are not recorded |
 | `--xdist-memory-watchdog` | `xdist_memory_watchdog` | off | kill the run over budget |
