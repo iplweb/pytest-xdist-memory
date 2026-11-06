@@ -10,7 +10,7 @@ a database, a browser per worker for Playwright, a live server...) a 14-core,
 much a worker of *your* test suite needs on *this* machine and answers
 `-n auto` with as many workers as fit into the memory available right now.
 
-> Status: pre-alpha sketch.
+> Status: alpha.
 
 ## What it does
 
